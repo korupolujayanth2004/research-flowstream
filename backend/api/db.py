@@ -21,8 +21,9 @@ MODEL_PATH = "./models/all-MiniLM-L6-v2"
 try:
     print(f"Loading sentence-transformer model from local path: {MODEL_PATH}")
     embedding_model = SentenceTransformer(MODEL_PATH)
+    print("✅ Model loaded successfully!")
 except Exception as e:
-    print(f"FATAL: Could not load the embedding model from {MODEL_PATH}.")
+    print(f"❌ FATAL: Could not load the embedding model from {MODEL_PATH}.")
     print("This indicates an issue with the Docker build or the file path in db.py.")
     raise e
 
@@ -40,14 +41,14 @@ def _ensure_collection():
     """Ensures the Qdrant collection exists, creating it if necessary."""
     try:
         qdrant.get_collection(collection_name=COLLECTION)
-        print(f"Collection '{COLLECTION}' already exists.")
+        print(f"✅ Collection '{COLLECTION}' already exists.")
     except Exception:
-        print(f"Collection '{COLLECTION}' not found. Creating it...")
+        print(f"🔧 Collection '{COLLECTION}' not found. Creating it...")
         qdrant.create_collection(
             collection_name=COLLECTION,
             vectors_config=VectorParams(size=384, distance=Distance.COSINE),
         )
-        print("Collection created.")
+        print("✅ Collection created.")
 
 _ensure_collection()
 
