@@ -13,19 +13,17 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").strip()
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "").strip()
 COLLECTION = "reports"
 
-# --- Model Loading (from local files) ---
-# Define the path to the model you saved in Step 1.
-# The './' makes it relative to your project root.
+# --- Model Loading (from local files within the Docker image) ---
+# This path corresponds to where the Dockerfile copies the model.
 MODEL_PATH = "./models/all-MiniLM-L6-v2" 
 
 # Initialize the embedding model from the local path.
-# This does NOT require network access or a writable cache.
 try:
     print(f"Loading sentence-transformer model from local path: {MODEL_PATH}")
     embedding_model = SentenceTransformer(MODEL_PATH)
 except Exception as e:
     print(f"FATAL: Could not load the embedding model from {MODEL_PATH}.")
-    print("Please ensure you have run 'python download_model.py' to download the model files.")
+    print("This indicates an issue with the Docker build or the file path in db.py.")
     raise e
 
 # --- Qdrant Client and Collection Setup ---
@@ -52,7 +50,6 @@ def _ensure_collection():
         print("Collection created.")
 
 _ensure_collection()
-
 
 # --- Database Functions ---
 def save_report(report_id: str, text: str, title: str):
