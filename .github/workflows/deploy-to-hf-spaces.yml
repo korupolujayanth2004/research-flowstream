@@ -17,13 +17,48 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prepare Space payload
+      - name: Prepare Space payload for deployment
         run: |
+          # Create a clean directory for the Space content
           rm -rf space_backend && mkdir -p space_backend
-          # Copy backend folder
-          rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/backend/
+          
+          # Copy the entire backend folder into the deployment directory
+          rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
 
-          # Add README.md for Space
+      - name: Create Dockerfile for Hugging Face Space
+        run: |
+          # This command writes the Dockerfile directly into the deployment directory
+          cat > space_backend/Dockerfile << 'EOF'
+          # Use a standard Python slim image
+          FROM python:3.10-slim
+
+          # Set the working directory inside the container
+          WORKDIR /app
+
+          # --- FIX: Set cache directories to a writable path ---
+          # The /tmp directory is always writable in Linux containers.
+          # This prevents the "Permission Denied" error.
+          ENV HF_HOME=/tmp/hf_cache
+          ENV SENTENCE_TRANSFORMERS_HOME=/tmp/hf_cache
+          ENV TRANSFORMERS_CACHE=/tmp/hf_cache
+          ENV TORCH_HOME=/tmp/hf_cache
+
+          # Set the port the container will listen on
+          ENV PORT=7860
+
+          # Copy the application files into the container's working directory
+          COPY . .
+
+          # Install Python dependencies
+          RUN pip install --no-cache-dir -r requirements.txt
+
+          # Command to start the FastAPI application
+          CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+          EOF
+
+      - name: Create README.md for Hugging Face Space
+        run: |
+          # This file tells Hugging Face how to run the Space
           cat > space_backend/README.md << 'EOF'
           ---
           title: Research Flowstream (Backend)
@@ -31,35 +66,22 @@ jobs:
           ---
           EOF
 
-          # Create Dockerfile
-          cat > space_backend/Dockerfile << 'EOF'
-          FROM python:3.10-slim
-          WORKDIR /app
-          ENV HF_HOME=/app/.cache
-          ENV TRANSFORMERS_CACHE=/app/.cache
-          ENV TORCH_HOME=/app/.cache
-          ENV PORT=7860
-          COPY backend/ /app/backend/
-          COPY backend/requirements.txt /app/backend/requirements.txt
-          RUN pip install --no-cache-dir -r /app/backend/requirements.txt
-          CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
-          EOF
-
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          QDRANT_URL: ${{ secrets.QDRANT_URL }}
-          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
         run: |
+          # Navigate into the prepared directory
           cd space_backend
+          
+          # Initialize a new git repository to push to the Space
           git init
-          git branch -M main
           git lfs install
+          git branch -M main
           git remote add origin https://Jayanthk2004:${HF_TOKEN}@huggingface.co/spaces/Jayanthk2004/Research-Flowstream
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add all files, commit, and force push to the Space
           git add .
           git commit -m "Deploy backend from GitHub Actions"
           git push -u origin main --force
