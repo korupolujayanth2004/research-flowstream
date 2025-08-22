@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from backend.api.models import ResearchRequest, SearchRequest
-from backend.api import db, crew
+from .models import ResearchRequest, SearchRequest  # relative import
+from . import db, crew  # relative import
 
 router = APIRouter()
 
