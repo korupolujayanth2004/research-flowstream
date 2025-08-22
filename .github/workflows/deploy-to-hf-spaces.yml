@@ -23,13 +23,11 @@ jobs:
           rm -rf space_backend && mkdir -p space_backend
           
           # Copy the entire backend folder into the deployment directory
-          # This content will be the 'build context' for Docker
           rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
 
       - name: Create Multi-Stage Dockerfile for Hugging Face Space
         run: |
-          # This command writes a multi-stage Dockerfile into the deployment directory.
-          # This is the key to solving the problem.
+          # This command writes the final, correct multi-stage Dockerfile
           cat > space_backend/Dockerfile << 'EOF'
           # === STAGE 1: The Builder ===
           # This stage downloads the model files.
@@ -38,12 +36,13 @@ jobs:
           # Install only the necessary packages for downloading
           RUN pip install --no-cache-dir sentence-transformers
 
-          # Define the model name and where to save it
+          # Define the model name and save path as environment variables
           ENV MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
           ENV SAVE_PATH=/opt/models/all-MiniLM-L6-v2
 
-          # Run the Python command to download the model inside this temporary container
-          RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer(ENV.get('MODEL_NAME')).save(ENV.get('SAVE_PATH'))"
+          # --- THE FIX IS HERE ---
+          # Run the Python command using 'os.getenv' to correctly read the environment variables
+          RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.getenv('MODEL_NAME')).save(os.getenv('SAVE_PATH'))"
 
 
           # === STAGE 2: The Final Application Image ===
@@ -63,7 +62,6 @@ jobs:
           # Copy your application code into the container
           COPY . .
 
-          # --- THE FIX ---
           # Copy the pre-downloaded model from the 'builder' stage into this final image
           # The model will now exist at /app/models/all-MiniLM-L6-v2
           COPY --from=builder /opt/models/all-MiniLM-L6-v2 ./models/all-MiniLM-L6-v2
@@ -99,5 +97,5 @@ jobs:
           
           # Add all files, commit, and force push to the Space
           git add .
-          git commit -m "Deploy backend with vendored model"
+          git commit -m "Deploy backend with vendored model (fix)"
           git push -u origin main --force
