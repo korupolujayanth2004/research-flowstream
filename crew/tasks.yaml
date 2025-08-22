@@ -1,0 +1,9 @@
+# Config for tasks
+tasks:
+  - agent: researcher
+    description: "Collect key background and facts."
+  - agent: analyst
+    description: "Analyze facts and summarize insights."
+  - agent: writer
+    description: "Write beginner-friendly research report."
+

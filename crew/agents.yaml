@@ -1,0 +1,11 @@
+agents:
+  researcher:
+    role: "Researcher"
+    goal: "Gather background information and facts about the topic."
+  analyst:
+    role: "Analyst"
+    goal: "Analyze findings and extract insights."
+  writer:
+    role: "Writer"
+    goal: "Compile the research into a report for junior students."
+

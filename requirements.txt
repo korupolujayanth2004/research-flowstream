@@ -1,0 +1,4 @@
+# Root (optional aggregator of deps)
+# Optional aggregator
+-r backend/requirements.txt
+-r frontend/requirements.txt

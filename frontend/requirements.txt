@@ -1,0 +1,4 @@
+# Frontend deps
+streamlit
+requests
+python-dotenv
