@@ -1,0 +1,72 @@
+name: Deploy Research Flowstream Backend to Hugging Face Spaces
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-to-hf-spaces.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare Space payload (FastAPI)
+        run: |
+          rm -rf space_backend && mkdir -p space_backend
+          # Copy backend app
+          rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
+
+          # Add Space manifest (Docker SDK)
+          cat > space_backend/README.md << 'EOF'
+          ---
+          title: Research Flowstream (Backend)
+          sdk: docker
+          ---
+          EOF
+
+          # Create Dockerfile for FastAPI + uvicorn
+          cat > space_backend/Dockerfile << 'EOF'
+          FROM python:3.10-slim
+
+          WORKDIR /app
+          COPY requirements.txt /app/requirements.txt
+          RUN pip install --no-cache-dir -r /app/requirements.txt
+
+          COPY . /app
+
+          ENV PORT=7860
+          CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]
+          EOF
+
+          # If no backend/requirements.txt exists, generate one
+          if [ ! -f space_backend/requirements.txt ]; then
+            cat > space_backend/requirements.txt << 'EOF'
+          fastapi
+          uvicorn
+          qdrant-client
+          sentence-transformers
+          requests
+          python-dotenv
+          EOF
+          fi
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          cd space_backend
+          git init
+          git lfs install
+          git remote add origin https://Jayanthk2004:${HF_TOKEN}@huggingface.co/spaces/Jayanthk2004/Research-Flowstream
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Deploy backend from GitHub Actions"
+          git push -u origin main --force
