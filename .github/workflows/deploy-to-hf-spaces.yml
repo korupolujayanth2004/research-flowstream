@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
-      - '.github/workflows/deploy-to-hf-spaces.yml'
+      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
           # Copy backend folder
           rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/backend/
 
-          # Copy README.md manifest
+          # Add README.md for Space
           cat > space_backend/README.md << 'EOF'
           ---
           title: Research Flowstream (Backend)
@@ -31,14 +31,17 @@ jobs:
           ---
           EOF
 
-          # Dockerfile
+          # Create Dockerfile
           cat > space_backend/Dockerfile << 'EOF'
           FROM python:3.10-slim
           WORKDIR /app
+          ENV HF_HOME=/app/.cache
+          ENV TRANSFORMERS_CACHE=/app/.cache
+          ENV TORCH_HOME=/app/.cache
+          ENV PORT=7860
           COPY backend/ /app/backend/
           COPY backend/requirements.txt /app/backend/requirements.txt
           RUN pip install --no-cache-dir -r /app/backend/requirements.txt
-          ENV PORT=7860
           CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
 
