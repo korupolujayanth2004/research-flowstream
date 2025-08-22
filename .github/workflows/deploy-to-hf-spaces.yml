@@ -12,20 +12,18 @@ jobs:
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout repo
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Step 2: Prepare Space payload (FastAPI)
       - name: Prepare Space payload
         run: |
           rm -rf space_backend && mkdir -p space_backend
-          # Copy backend files
-          rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
+          # Copy backend folder
+          rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/backend/
 
-          # Add Space manifest (Docker SDK)
+          # Copy README.md manifest
           cat > space_backend/README.md << 'EOF'
           ---
           title: Research Flowstream (Backend)
@@ -33,36 +31,17 @@ jobs:
           ---
           EOF
 
-          # Create Dockerfile for FastAPI
+          # Dockerfile
           cat > space_backend/Dockerfile << 'EOF'
           FROM python:3.10-slim
-
           WORKDIR /app
-          COPY requirements.txt /app/requirements.txt
-          RUN pip install --no-cache-dir -r /app/requirements.txt
-
-          COPY . /app
-
-          # Expose HF Space port
+          COPY backend/ /app/backend/
+          COPY backend/requirements.txt /app/backend/requirements.txt
+          RUN pip install --no-cache-dir -r /app/backend/requirements.txt
           ENV PORT=7860
-
-          # Start FastAPI app
-          CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]
+          CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
 
-          # Create requirements.txt if missing
-          if [ ! -f space_backend/requirements.txt ]; then
-            cat > space_backend/requirements.txt << 'EOF'
-          fastapi
-          uvicorn
-          qdrant-client
-          sentence-transformers
-          requests
-          python-dotenv
-          EOF
-          fi
-
-      # Step 3: Push to Hugging Face Space
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -73,7 +52,7 @@ jobs:
         run: |
           cd space_backend
           git init
-          git branch -M main                # <-- Fixes the "src refspec main does not match any"
+          git branch -M main
           git lfs install
           git remote add origin https://Jayanthk2004:${HF_TOKEN}@huggingface.co/spaces/Jayanthk2004/Research-Flowstream
           git config user.name "github-actions[bot]"
