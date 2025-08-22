@@ -22,14 +22,15 @@ jobs:
           # Create a clean directory for the Space content
           rm -rf space_backend && mkdir -p space_backend
           
-          # --- THIS IS IMPORTANT ---
-          # Copy the 'backend' directory itself into the deployment folder.
-          # This ensures our build context has the 'backend' folder at its root.
-          rsync -a --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
+          # --- THE FIRST CRITICAL FIX ---
+          # Copy the 'backend' directory itself into the 'space_backend' folder.
+          # This creates 'space_backend/backend/', which is the correct structure
+          # for the Docker build context.
+          cp -r backend/ space_backend/
 
       - name: Create Multi-Stage Dockerfile for Hugging Face Space
         run: |
-          # This command writes the final, correct multi-stage Dockerfile
+          # This command writes the final, correct multi-stage Dockerfile.
           cat > space_backend/Dockerfile << 'EOF'
           # === STAGE 1: The Builder (Downloads the model) ===
           FROM python:3.10-slim as builder
@@ -38,31 +39,29 @@ jobs:
           ENV SAVE_PATH=/opt/models/all-MiniLM-L6-v2
           RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.getenv('MODEL_NAME')).save(os.getenv('SAVE_PATH'))"
 
-
           # === STAGE 2: The Final Application Image ===
           FROM python:3.10-slim
           WORKDIR /app
           ENV PORT=7860
 
-          # --- THE FIRST PART OF THE FIX ---
+          # --- THE SECOND CRITICAL FIX ---
           # Add the working directory to Python's import path.
           # This tells Python to look for modules starting from /app.
-          # Now, 'from backend...' will correctly find '/app/backend/'.
-          ENV PYTHONPATH="${PYTHONPATH}:/app"
+          # When your code runs `from backend...`, Python will find `/app/backend`.
+          ENV PYTHONPATH=/app
 
-          # Copy the application's requirements file and install dependencies
-          COPY requirements.txt .
+          # Copy just the requirements from the build context to optimize Docker layers
+          COPY backend/requirements.txt .
           RUN pip install --no-cache-dir -r requirements.txt
 
-          # Copy your application code into the container
-          # This will create the /app/backend/ structure
-          COPY . .
+          # Copy your application code into the container.
+          # This will create the /app/backend/ structure.
+          COPY backend/ .
 
           # Copy the pre-downloaded model from the builder stage
           COPY --from=builder /opt/models/all-MiniLM-L6-v2 ./models/all-MiniLM-L6-v2
 
-          # --- THE SECOND PART OF THE FIX ---
-          # The run command is correct for your code structure.
+          # This command will now work because of the PYTHONPATH setting.
           CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
 
@@ -87,5 +86,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Deploy backend with corrected PYTHONPATH"
+          git commit -m "Deploy backend with corrected PYTHONPATH and file structure"
           git push -u origin main --force
