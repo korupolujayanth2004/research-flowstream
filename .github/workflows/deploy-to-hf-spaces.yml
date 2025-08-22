@@ -23,34 +23,50 @@ jobs:
           rm -rf space_backend && mkdir -p space_backend
           
           # Copy the entire backend folder into the deployment directory
+          # This content will be the 'build context' for Docker
           rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
 
-      - name: Create Dockerfile for Hugging Face Space
+      - name: Create Multi-Stage Dockerfile for Hugging Face Space
         run: |
-          # This command writes the Dockerfile directly into the deployment directory
+          # This command writes a multi-stage Dockerfile into the deployment directory.
+          # This is the key to solving the problem.
           cat > space_backend/Dockerfile << 'EOF'
-          # Use a standard Python slim image
+          # === STAGE 1: The Builder ===
+          # This stage downloads the model files.
+          FROM python:3.10-slim as builder
+
+          # Install only the necessary packages for downloading
+          RUN pip install --no-cache-dir sentence-transformers
+
+          # Define the model name and where to save it
+          ENV MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+          ENV SAVE_PATH=/opt/models/all-MiniLM-L6-v2
+
+          # Run the Python command to download the model inside this temporary container
+          RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer(ENV.get('MODEL_NAME')).save(ENV.get('SAVE_PATH'))"
+
+
+          # === STAGE 2: The Final Application Image ===
+          # This is the lean, final image that will run your app.
           FROM python:3.10-slim
 
           # Set the working directory inside the container
           WORKDIR /app
 
-          # --- FIX: Set cache directories to a writable path ---
-          # The /tmp directory is always writable in Linux containers.
-          # This prevents the "Permission Denied" error.
-          ENV HF_HOME=/tmp/hf_cache
-          ENV SENTENCE_TRANSFORMERS_HOME=/tmp/hf_cache
-          ENV TRANSFORMERS_CACHE=/tmp/hf_cache
-          ENV TORCH_HOME=/tmp/hf_cache
-
           # Set the port the container will listen on
           ENV PORT=7860
 
-          # Copy the application files into the container's working directory
+          # Copy the application's requirements file and install dependencies
+          COPY requirements.txt .
+          RUN pip install --no-cache-dir -r requirements.txt
+
+          # Copy your application code into the container
           COPY . .
 
-          # Install Python dependencies
-          RUN pip install --no-cache-dir -r requirements.txt
+          # --- THE FIX ---
+          # Copy the pre-downloaded model from the 'builder' stage into this final image
+          # The model will now exist at /app/models/all-MiniLM-L6-v2
+          COPY --from=builder /opt/models/all-MiniLM-L6-v2 ./models/all-MiniLM-L6-v2
 
           # Command to start the FastAPI application
           CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
@@ -58,7 +74,7 @@ jobs:
 
       - name: Create README.md for Hugging Face Space
         run: |
-          # This file tells Hugging Face how to run the Space
+          # This file tells Hugging Face how to run the Space using the Dockerfile
           cat > space_backend/README.md << 'EOF'
           ---
           title: Research Flowstream (Backend)
@@ -83,5 +99,5 @@ jobs:
           
           # Add all files, commit, and force push to the Space
           git add .
-          git commit -m "Deploy backend from GitHub Actions"
+          git commit -m "Deploy backend with vendored model"
           git push -u origin main --force
