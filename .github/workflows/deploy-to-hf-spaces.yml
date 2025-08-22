@@ -22,57 +22,52 @@ jobs:
           # Create a clean directory for the Space content
           rm -rf space_backend && mkdir -p space_backend
           
-          # Copy the entire backend folder into the deployment directory
-          rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
+          # --- THIS IS IMPORTANT ---
+          # Copy the 'backend' directory itself into the deployment folder.
+          # This ensures our build context has the 'backend' folder at its root.
+          rsync -a --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
 
       - name: Create Multi-Stage Dockerfile for Hugging Face Space
         run: |
           # This command writes the final, correct multi-stage Dockerfile
           cat > space_backend/Dockerfile << 'EOF'
-          # === STAGE 1: The Builder ===
-          # This stage downloads the model files.
+          # === STAGE 1: The Builder (Downloads the model) ===
           FROM python:3.10-slim as builder
-
-          # Install only the necessary packages for downloading
           RUN pip install --no-cache-dir sentence-transformers
-
-          # Define the model name and save path as environment variables
           ENV MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
           ENV SAVE_PATH=/opt/models/all-MiniLM-L6-v2
-
-          # --- THIS IS THE CORRECTED COMMAND ---
-          # It now uses 'import os' and 'os.getenv' which is valid Python syntax
           RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.getenv('MODEL_NAME')).save(os.getenv('SAVE_PATH'))"
 
 
           # === STAGE 2: The Final Application Image ===
-          # This is the lean, final image that will run your app.
           FROM python:3.10-slim
-
-          # Set the working directory inside the container
           WORKDIR /app
-
-          # Set the port the container will listen on
           ENV PORT=7860
+
+          # --- THE FIRST PART OF THE FIX ---
+          # Add the working directory to Python's import path.
+          # This tells Python to look for modules starting from /app.
+          # Now, 'from backend...' will correctly find '/app/backend/'.
+          ENV PYTHONPATH="${PYTHONPATH}:/app"
 
           # Copy the application's requirements file and install dependencies
           COPY requirements.txt .
           RUN pip install --no-cache-dir -r requirements.txt
 
           # Copy your application code into the container
+          # This will create the /app/backend/ structure
           COPY . .
 
-          # Copy the pre-downloaded model from the 'builder' stage into this final image
-          # The model will now exist at /app/models/all-MiniLM-L6-v2
+          # Copy the pre-downloaded model from the builder stage
           COPY --from=builder /opt/models/all-MiniLM-L6-v2 ./models/all-MiniLM-L6-v2
 
-          # Command to start the FastAPI application
+          # --- THE SECOND PART OF THE FIX ---
+          # The run command is correct for your code structure.
           CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
 
       - name: Create README.md for Hugging Face Space
         run: |
-          # This file tells Hugging Face how to run the Space using the Dockerfile
           cat > space_backend/README.md << 'EOF'
           ---
           title: Research Flowstream (Backend)
@@ -84,18 +79,13 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Navigate into the prepared directory
           cd space_backend
-          
-          # Initialize a new git repository to push to the Space
           git init
           git lfs install
           git branch -M main
           git remote add origin https://Jayanthk2004:${HF_TOKEN}@huggingface.co/spaces/Jayanthk2004/Research-Flowstream
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Add all files, commit, and force push to the Space
           git add .
-          git commit -m "Deploy backend with vendored model (fix 2)"
+          git commit -m "Deploy backend with corrected PYTHONPATH"
           git push -u origin main --force
