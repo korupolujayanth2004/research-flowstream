@@ -40,8 +40,8 @@ jobs:
           ENV MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
           ENV SAVE_PATH=/opt/models/all-MiniLM-L6-v2
 
-          # --- THE FIX IS HERE ---
-          # Run the Python command using 'os.getenv' to correctly read the environment variables
+          # --- THIS IS THE CORRECTED COMMAND ---
+          # It now uses 'import os' and 'os.getenv' which is valid Python syntax
           RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.getenv('MODEL_NAME')).save(os.getenv('SAVE_PATH'))"
 
 
@@ -97,5 +97,5 @@ jobs:
           
           # Add all files, commit, and force push to the Space
           git add .
-          git commit -m "Deploy backend with vendored model (fix)"
+          git commit -m "Deploy backend with vendored model (fix 2)"
           git push -u origin main --force
