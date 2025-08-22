@@ -1,7 +1,9 @@
 # Project README
 # 1. Clone & setup
-git clone <repo-url>
+git clone https://github.com/korupolujayanth2004/research-flowstream.git
+
 cd multi_agent_research_assistant
+
 python3 -m venv .venv && source .venv/bin/activate
 
 # 2. Install requirements
