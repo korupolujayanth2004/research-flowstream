@@ -12,15 +12,17 @@ jobs:
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout repo
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Prepare Space payload (FastAPI)
+      # Step 2: Prepare Space payload (FastAPI)
+      - name: Prepare Space payload
         run: |
           rm -rf space_backend && mkdir -p space_backend
-          # Copy backend app
+          # Copy backend files
           rsync -av --exclude '__pycache__' --exclude '.DS_Store' backend/ space_backend/
 
           # Add Space manifest (Docker SDK)
@@ -31,7 +33,7 @@ jobs:
           ---
           EOF
 
-          # Create Dockerfile for FastAPI + uvicorn
+          # Create Dockerfile for FastAPI
           cat > space_backend/Dockerfile << 'EOF'
           FROM python:3.10-slim
 
@@ -41,11 +43,14 @@ jobs:
 
           COPY . /app
 
+          # Expose HF Space port
           ENV PORT=7860
+
+          # Start FastAPI app
           CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]
           EOF
 
-          # If no backend/requirements.txt exists, generate one
+          # Create requirements.txt if missing
           if [ ! -f space_backend/requirements.txt ]; then
             cat > space_backend/requirements.txt << 'EOF'
           fastapi
@@ -57,12 +62,18 @@ jobs:
           EOF
           fi
 
+      # Step 3: Push to Hugging Face Space
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
         run: |
           cd space_backend
           git init
+          git branch -M main                # <-- Fixes the "src refspec main does not match any"
           git lfs install
           git remote add origin https://Jayanthk2004:${HF_TOKEN}@huggingface.co/spaces/Jayanthk2004/Research-Flowstream
           git config user.name "github-actions[bot]"
